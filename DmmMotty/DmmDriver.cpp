@@ -312,7 +312,7 @@ void Make_CRC_Send(unsigned char Plength,unsigned char B[8]) {
     Error_Check += B[i];
   }
   Error_Check = Error_Check|0x80;
-  SerialWrite(Error_Check);
+  Serial.write(Error_Check);
 }
 
 
