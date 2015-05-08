@@ -24,6 +24,7 @@ Communication Format
 //#include <sysexits.h>
 //#include <stdio.h>
 #include <limits.h>
+#include "Arduino.h"
 #include "DmmDriver.h"
 
 #define bool unsigned short
@@ -59,7 +60,7 @@ const char * ParameterName(char isCode) {
 
 void ReadPackage() {
   unsigned char c,cif;
-  if (SerialAvailable() == 0) { // no new data
+  if (Serial.available() < 0) { // no new data
       return;
       /*
        delay(50);
@@ -71,9 +72,9 @@ void ReadPackage() {
       }
       */
   }
-  while(SerialAvailable() > 0 && ((InBfTopPointer+1) % sizeof(InputBuffer)) != InBfBtmPointer  ) {
+  while(Serial.available () > 0 && ((InBfTopPointer+1) % sizeof(InputBuffer)) != InBfBtmPointer  ) {
       // while there is data and buffer not full
-    InputBuffer[InBfTopPointer] = SerialRead(); //Load InputBuffer with received packets
+    InputBuffer[InBfTopPointer] = Serial.read(); //Load InputBuffer with received packets
     InBfTopPointer++;  InBfTopPointer %=sizeof(InputBuffer);
   }
   while(InBfBtmPointer != InBfTopPointer)  { // while not empty
@@ -307,7 +308,7 @@ void Make_CRC_Send(unsigned char Plength,unsigned char B[8]) {
   unsigned char Error_Check = 0;
   int i;
   for(i=0;i<Plength-1;i++) {
-    SerialWrite(B[i]);
+    Serial.write(B[i]);
     Error_Check += B[i];
   }
   Error_Check = Error_Check|0x80;
