@@ -21,59 +21,15 @@ Communication Format
 
 */
 
-#include <sysexits.h>
-#include <stdio.h>
+//#include <sysexits.h>
+//#include <stdio.h>
 #include <limits.h>
+#include "DmmDriver.h"
 
-#include "SerialPort.h"
+#define bool unsigned short
+#define true 1
+#define false 0
 
-#define Go_Absolute_Pos 0x01
-#define Turn_ConstSpeed 0x0a
-#define Set_Origin 0x00
-#define Set_HighSpeed 0x14
-#define Set_HighAccel 0x15
-#define Set_MainGain  0x10
-#define Set_SpeedGain 0x11
-#define Set_IntGain  0x12
-
-
-#define Set_Drive_Config 0x07
-#define Config_Bit_MOTOR_DRIVE 0x10 // HIGH: Motor Drive Enabled, LOW: Motor Drive Free
-
-#define General_Read 0x0e
-
-#define Is_AbsPos32 0x1b
-#define Is_TrqCurrent 0x1e
-#define Is_MainGain 0x10
-#define Is_SpeedGain 0x11
-#define Is_IntGain 0x12
-#define Is_Status 0x19
-#define Is_Config 0x1a
-#define Is_PosOn_Range 0x17
-#define Is_GearNumber 0x18
-#define Is_TrqCons 0x13
-#define Is_HighSpeed 0x14
-#define Is_HighAccel 0x15
-#define Is_Drive_ID 0x16
-
-#define Read_MainGain 0x18
-#define Read_SpeedGain 0x19
-#define Read_IntGain 0x1a
-#define Read_Drive_Config 0x08
-#define Read_Drive_Status 0x09
-#define Read_Pos_OnRange 0x1e
-#define Read_GearNumber 0x1f
-#define Read_Drive_ID 0x06
-
-#ifndef MIN
-    #define MIN(a,b) ((a<b) ? a : b)
-#endif
-
-#ifndef MAX
-    #define MAX(a,b) ((a>b) ? a : b)
-#endif
-
-typedef enum {In_Progress = 0, Complete_Success,  CRC_Error, Timeout_Error } ProtocolError_t;
 
 static char InputBuffer[8]; //Input buffer from RS232,
 static signed int InBfTopPointer = 0,InBfBtmPointer = 0;//input buffer pointers
@@ -81,13 +37,6 @@ static unsigned char Read_Package_Buffer[8], Read_Num, Read_Package_Length;
 long Drive_Read_Value = LONG_MIN;
 unsigned char Drive_Read_Code = -1;
 ProtocolError_t ProtocolError = Timeout_Error;
-unsigned char configByte = 0;
-
-// Forwards
-ProtocolError_t Get_Function(void);
-long Cal_SignValue(unsigned char One_Package[8]);
-unsigned int Cal_UnsignedValue(unsigned char One_Package[8]);
-void Make_CRC_Send(unsigned char Plength,unsigned char B[8]);
 
 const char * ParameterName(char isCode) {
     switch(isCode) {
@@ -161,11 +110,12 @@ void ReadPackage() {
 
 ProtocolError_t Get_Function(void)
 {
+  int i;
   char ID, ReceivedFunction_Code, CRC_Check;
   ID = Read_Package_Buffer[0]&0x7f;
   ReceivedFunction_Code = Read_Package_Buffer[1]&0x1f;
   CRC_Check = 0;
-  for(int i=0;i<Read_Package_Length-1;i++)
+  for(i=0;i<Read_Package_Length-1;i++)
   {
     CRC_Check += Read_Package_Buffer[i];
   }
@@ -178,7 +128,7 @@ ProtocolError_t Get_Function(void)
       return CRC_Error;
   }
   Drive_Read_Code = (unsigned char)ReceivedFunction_Code;
-  switch(ReceivedFunction_Code){
+  switch(ReceivedFunction_Code) {
         case Is_AbsPos32:
         case Is_TrqCurrent:
         case Is_GearNumber:
@@ -250,7 +200,7 @@ bool printStatusByte(unsigned char statusByte) {
         printf("\tBUSY with current S-curve,lieanr,circular motion\n");
     }
     
-    Boolean pin2JP3 = (statusByte & 64);  // bit 6
+    bool pin2JP3 = (statusByte & 64);  // bit 6
     printf("\tCNC Zero Position (PIN 2 of JP3): %s\n", (pin2JP3) ? "HIGH" : "LOW");
     return FatalError;
 }
@@ -355,7 +305,8 @@ void Send_Package(unsigned char func, char ID , long Displacement)
 
 void Make_CRC_Send(unsigned char Plength,unsigned char B[8]) {
   unsigned char Error_Check = 0;
-  for(int i=0;i<Plength-1;i++) {
+  int i;
+  for(i=0;i<Plength-1;i++) {
     SerialWrite(B[i]);
     Error_Check += B[i];
   }
@@ -468,121 +419,3 @@ void ReadMotorPosition32(char AxisID)
 }
 
 
-int testMotor(void)
-{
-    const char Axis_Num = 0;
-    unsigned char statusByte = -1;
-    printf("DMM Test Motor\n\n");
-    
-    long result = ReadParamer(Read_Drive_Status, Axis_Num);
-    bool FatalError = true;
-    if (result != LONG_MIN ) {
-        statusByte = (unsigned char)(result & 0x7f);
-        FatalError = printStatusByte(Drive_Read_Value);
-    }
-    
-    if (FatalError || result == LONG_MIN) {
-        return statusByte;
-        // STOP  MOTOR PISSED!
-    }
-
-    long delta = 5; //100;
-    long center = 0;
-    int delay_ms = 1000;
-
-    long config = ReadParamer(Read_Drive_Config, Axis_Num);
-    if (configByte >= 0 && config <= 0x7f) {
-        configByte = (unsigned char)config;
-    }
-    
-    
-    
-    // limited "Set" writes to firmware dont' use in loopDmmDriver_SerialPort_h
-    //SetMainGain(Axis_Num, 60); //[15]// [14~20~40(loud)]relative to load, increase as load increases
-    ReadParamer(Read_MainGain, Axis_Num);  ReadMainGain(Axis_Num); // Param is MotorID Main Gain stored in MainGain_Read variable
-    // SetSpeedGain(Axis_Num, 127); // [127] higher : less dynamic movements
-    ReadParamer(Read_SpeedGain, Axis_Num);
-    ReadMotorPosition32(Axis_Num);
-    
-   // SetIntGain(Axis_Num, 1); // higher for rigid system, lower for loose system (outside disturbance)
-                             // lag in feedback from encoder
-    
-    ReadParamer(Read_IntGain, Axis_Num);
-    ReadParamer(Read_Pos_OnRange, Axis_Num);
-    ReadParamer(Read_GearNumber, Axis_Num); // 500
-    ReadParamer(Read_Drive_Config, Axis_Num);
-    
-#if false
-    
-    // reset Origin to Down/Reset Position
-    ResetOrgin(Axis_Num);
-    //return 0;
-    
-    // These are not remembered
-    SetMaxSpeed(Axis_Num, 10); // 1
-    SetMaxAccel(Axis_Num, 16); // 4
-
-    
-    //MoveMotorToAbsolutePosition32(Axis_Num,0);
-    
-    
-    printf("\n");
-    SetMaxSpeed(Axis_Num, 2); // 1
-    SetMaxAccel(Axis_Num, 6); // 6
-    
-    MoveMotorConstantRotation(0,0);
-    delay(50);
-    return 0;
-    for(;;) {
-        if ((center % 3000) == 0) {
-            Send_Package(General_Read, 0 , Is_AbsPos32);
-            delta = delta * -1;
-        }
-        ReadPackage();
-        delay(10);
-     
-
-//        SetMaxSpeed(Axis_Num, 1); // 1
-//        SetMaxAccel(Axis_Num, 6); // 4
-        
-        center += delta;
-        MoveMotorToAbsolutePosition32(Axis_Num, center);
-    }
-    
-    MoveMotorToAbsolutePosition32(Axis_Num, center + delta);
-//    ReadMotorTorqueCurrent(Axis_Num); //Motor torque current stored in MotorTorqueCurrent variable
-    delay(delay_ms);
-
-    MoveMotorToAbsolutePosition32(Axis_Num, center);
-//    ReadMotorTorqueCurrent(Axis_Num); //Motor torque current stored in MotorTorqueCurrent variable
-    delay(delay_ms);
- //   ReadMotorPosition32(Axis_Num); //Motor absolute position stored in Motor_Pos32 variable
-    
-    MoveMotorToAbsolutePosition32(Axis_Num, center + -1 * delta);
-//    ReadMotorTorqueCurrent(Axis_Num); //Motor torque current stored in MotorTorqueCurrent variable
-    delay(delay_ms);
- //   ReadMotorPosition32(Axis_Num); //Motor absolute position stored in Motor_Pos32 variable
-
-    MoveMotorToAbsolutePosition32(Axis_Num, center);
-        //   ReadMotorTorqueCurrent(Axis_Num); //Motor torque current stored in MotorTorqueCurrent variable
-    delay(delay_ms);
-
-        
-    //}
-    
-#endif
-    
-    MotorDisengage(Axis_Num,configByte);
-    delay(50);
-    return 0;
-}
-
-
-int main() {
-    int ret = 0;
-    if (openSerial("/dev/cu.usbserial") == EX_OK) {
-         ret = testMotor();
-        closeSerial();
-    }
-    return ret;
-}
