@@ -13,14 +13,15 @@ void setup() {
                              // lag in feedback from encoder
                              
   SetSpeedGain(Axis_Num, 127); // [127] higher : less dynamic movements
-  SetMaxSpeed(Axis_Num, 2); // 1
-  SetMaxAccel(Axis_Num, 4); // 4
+  SetMaxSpeed(Axis_Num, 1); // 1
+  SetMaxAccel(Axis_Num, 1); // 4
   MotorEngage(Axis_Num,0);
 }
 
 
 void loop() {  
-   // these are fogorrent on power reset to we just send them 
+   // these next 2 parameters are not remembered on power reset
+   // so we just send them all the time.
     SetMaxSpeed(Axis_Num, 2); // 1
     SetMaxAccel(Axis_Num, 4); // 4
   
@@ -31,14 +32,24 @@ void loop() {
     delay(2000);
  #endif
     
-#if true // Abs Pos Test
-    MoveMotorToAbsolutePosition32(Axis_Num, -1000);
-    delay(4000);
-    MoveMotorToAbsolutePosition32(Axis_Num, 1000);    
-    delay(4000);
+
+#if false // Abs Pos Test
+    MoveMotorToAbsolutePosition32(Axis_Num, -500);
+    delay(1000);
+    MoveMotorToAbsolutePosition32(Axis_Num, 500);    
+    delay(100);
 #endif
-    
-  
+
+#if true // Rapid Command Test
+    for(long p = 0; p < 1000; p++)  {
+      MoveMotorToAbsolutePosition32(Axis_Num, p);    
+    }
+    delay(1000);
+    for(long p = 1000; p > 0; p--)  {
+      MoveMotorToAbsolutePosition32(Axis_Num, p);    
+    }
+    delay(1000);
+#endif
 }
 
 
